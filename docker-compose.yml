@@ -1,0 +1,18 @@
+version: '3.8'  # Specify the Docker Compose file format version
+
+services:
+  go-rod-app:
+    image: go-rod-app  # Name of the image built from your Dockerfile
+    build:
+      context: .  # Directory containing your Dockerfile and source code
+      dockerfile: Dockerfile  # Your Dockerfile
+    ports:
+      - "8080:8080"  # Map port 8080 on the host to port 8080 on the container (adjust as necessary for your app)
+
+    environment:
+      - TG_TOKEN=5876084569:AAElMTaAUTdnliytYdE0i5WIq6viDa-RwcQ
+      - OPENAI_TOKEN=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
+
+    # Optional: volumes to mount into your container
+    # volumes:
+    #   - ./data:/data
