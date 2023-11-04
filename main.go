@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	godotenv "github.com/joho/godotenv"
 	openai "github.com/sashabaranov/go-openai"
 	tele "gopkg.in/telebot.v3"
@@ -398,7 +399,10 @@ func get_article_contents(meta []ArticleInfo) []ArticleContent {
 
 func getArticleText(obj *ArticleInfo) ArticleContent {
 
-	browser := rod.New().MustConnect()
+	path, _ := launcher.LookPath()
+	u := launcher.New().Bin(path).MustLaunch()
+	println(u)
+	browser := rod.New().ControlURL(u).MustConnect()
 	page := browser.MustPage(obj.Link).MustWaitLoad()
 	defer func() {
 		page.MustClose()
@@ -519,8 +523,10 @@ func get_article_meta() []ArticleInfo {
 func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 
 	var articles []ArticleInfo
-
-	browser := rod.New().MustConnect()
+	path, _ := launcher.LookPath()
+	u := launcher.New().Bin(path).MustLaunch()
+	println(u)
+	browser := rod.New().ControlURL(u).MustConnect()
 	page := browser.MustPage(obj.Link).MustWaitLoad()
 
 	rod.Try(func() {

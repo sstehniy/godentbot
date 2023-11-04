@@ -1,0 +1,18 @@
+version: '3.8'  # Use version 3.8 of the Docker Compose file format
+
+services:  # Define the services our application is composed of
+  go-rod-app:  # Name of the first service
+    build:  # This will use the Dockerfile to build the image
+      context: .  # Use the current directory to find the Dockerfile
+      dockerfile: Dockerfile  # Specify the name of the Dockerfile (assuming it's named 'Dockerfile')
+    image: go-rod-app:latest  # Tag the built image for later reference
+    container_name: go_rod_app_container  # Give the container a custom name
+    ports:  # Map ports (if your app listens on a port, you should map it here)
+      - "8080:8080"  # This assumes your application listens on port 8080, change if needed
+    environment:  # Set environment variables (if you need any)
+      - "CHROME_BIN=/usr/bin/chromium-browser"
+      - "TG_TOKEN=5876084569:AAElMTaAUTdnliytYdE0i5WIq6viDa-RwcQ"
+      - "OPENAI_TOKEN=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"
+      # Bind mount a volume (optional, uncomment if needed)
+      # - ./data:/app/data  # Persist data by mapping a local folder to a folder in the container
+    command: ["./go-rod-app"]  # Override the default command (this is optional as it's already defined in Dockerfile)

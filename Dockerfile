@@ -1,22 +1,22 @@
-# Build Stage
 FROM golang:1.21 AS builder
 
+ENV GO111MODULE=on 
+
 WORKDIR /app
+
+# manage dependencies
 COPY . .
 RUN go get -d -v ./...
-RUN go build -o go-rod-app .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o go-rod-app .
 
-# Final Stage
-FROM alpine:latest
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o /go-rod-app .
 
-# Update package list and install Chromium
-RUN apk add chromium
-
-# Copy the compiled Go application from the build stage
-COPY --from=builder /app/go-rod-app /usr/local/bin/go-rod-app
-
-# Set the working directory
-WORKDIR /usr/local/bin
-
-# Command to run the application
-CMD ["./go-rod-app"]
+FROM alpine:latest  
+# Install base packages
+RUN apk update
+RUN apk upgrade
+RUN apk add --no-cache chromium
+WORKDIR /root/
+COPY --from=builder /go-rod-app ./
+CMD ["./go-rod-app"]  
