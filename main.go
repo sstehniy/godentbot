@@ -53,10 +53,6 @@ func splitPrompt(text string, splitLength int) ([]string, error) {
 }
 
 func splitDigest(text string, splitLength int) []string {
-	// the text should be split by \n\n and then it should be checked if the length of the text is less than 4096
-	// if it is less than 4096, then it should be sent as it is
-	// if it is more than 4096, then it should be split by \n and then it should be checked if the length of the text is less than 4096
-
 	// split the text by \n\n
 	splitted := strings.Split(text, "\n\n")
 	var result []string
@@ -184,7 +180,7 @@ func main() {
 				}
 			}
 
-			chathistory := []openai.ChatCompletionMessage{}
+			var chathistory []openai.ChatCompletionMessage
 			for _, prompt := range prompts {
 
 				chathistory = append(chathistory, prompt)
@@ -411,6 +407,7 @@ func getArticleText(obj *ArticleInfo) ArticleContent {
 	if obj.ErrorPage != "" {
 		err := rod.Try(func() {
 			page.Timeout(1 * time.Second).MustElement(obj.ErrorPage)
+
 		})
 
 		if err == nil {
