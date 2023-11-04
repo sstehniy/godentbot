@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -389,21 +390,30 @@ func get_article_contents(meta []ArticleInfo) []ArticleContent {
 	for idx, obj := range meta {
 
 		println(idx)
-		article := getArticleText(&obj)
-
+		article, err := getArticleText(&obj)
+		if err != nil {
+			continue
+		}
 		articles = append(articles, article)
 	}
 
 	return articles
 }
 
-func getArticleText(obj *ArticleInfo) ArticleContent {
+func getArticleText(obj *ArticleInfo) (ArticleContent, error) {
 
 	path, _ := launcher.LookPath()
 	u := launcher.New().Bin(path).MustLaunch()
 	println(u)
 	browser := rod.New().ControlURL(u).MustConnect()
-	page := browser.MustPage(obj.Link).MustWaitLoad()
+	page := browser.MustPage()
+
+	err := rod.Try(func() {
+		page.Timeout(5 * time.Second).MustNavigate(obj.Link)
+	})
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ArticleContent{}, err
+	}
 	defer func() {
 		page.MustClose()
 		browser.MustClose()
@@ -422,7 +432,7 @@ func getArticleText(obj *ArticleInfo) ArticleContent {
 				Date:         obj.Date,
 				Content:      "",
 				SectionTitle: obj.SectionTitle,
-			}
+			}, nil
 
 		}
 
@@ -452,7 +462,7 @@ func getArticleText(obj *ArticleInfo) ArticleContent {
 		Date:         obj.Date,
 		Content:      text,
 		SectionTitle: obj.SectionTitle,
-	}
+	}, nil
 }
 
 func get_article_meta() []ArticleInfo {
@@ -467,6 +477,7 @@ func get_article_meta() []ArticleInfo {
 	for i, obj := range linksToElements {
 		go func(i int, obj ArticleInfoSelectors) {
 			articles := processPage(&obj)
+			fmt.Printf("processed %d articles\n", len(articles))
 			channels[i] <- articles
 		}(i, obj)
 	}
@@ -527,7 +538,15 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 	u := launcher.New().Bin(path).MustLaunch()
 	println(u)
 	browser := rod.New().ControlURL(u).MustConnect()
-	page := browser.MustPage(obj.Link).MustWaitLoad()
+	page := browser.MustPage()
+
+	err := rod.Try(func() {
+		page.Timeout(5 * time.Second).MustNavigate(obj.Link).MustWaitLoad()
+	})
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return articles
+	}
 
 	rod.Try(func() {
 		cookieconsent := page.MustElement(obj.FrameConsent)
