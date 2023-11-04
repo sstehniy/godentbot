@@ -130,7 +130,7 @@ func main() {
 
 	b.Handle("/start", func(c tele.Context) error {
 
-		return c.Send("Welcome to the Zahnmedizin News Bot, my luv!. Send the /subscribe command to get the latest news in the field of dentistry")
+		return c.Send("Welcome to the Zahnmedizin News Bot, my luv!. Send the /generate command to get the latest news in the field of dentistry")
 	})
 
 	b.Handle("/generate", func(c tele.Context) error {
@@ -165,7 +165,7 @@ func main() {
 			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)))
 
 			// create a prompt
-			prompt := "This is a summary of an article. Please create a short digest of maximum 1 sentence of the following article. Make the output as concise and comprehensive, though as short as possible. Please respond only with the content of the digest and nothing else. Exclude article name " + article.SectionTitle + ":\n\n" + article.Title + "\n\n" + article.Content + "\n\n"
+			prompt := "This is a summary of an article. Please create a short digest of maximum 1 sentence in german language only of the following article. Make the output as concise and comprehensive, though as short as possible. Please respond only with the content of the digest and nothing else. Exclude article name " + article.SectionTitle + ":\n\n" + article.Title + "\n\n" + article.Content + "\n\n"
 
 			texts, err := splitPrompt(prompt, 2000)
 			if err != nil {
@@ -409,7 +409,7 @@ func getArticleText(obj *ArticleInfo) (ArticleContent, error) {
 	page := browser.MustPage()
 
 	err := rod.Try(func() {
-		page.Timeout(5 * time.Second).MustNavigate(obj.Link)
+		page.Timeout(15 * time.Second).MustNavigate(obj.Link)
 	})
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ArticleContent{}, err
@@ -541,7 +541,7 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 	page := browser.MustPage()
 
 	err := rod.Try(func() {
-		page.Timeout(5 * time.Second).MustNavigate(obj.Link).MustWaitLoad()
+		page.Timeout(15 * time.Second).MustNavigate(obj.Link).MustWaitLoad()
 	})
 
 	if errors.Is(err, context.DeadlineExceeded) {
