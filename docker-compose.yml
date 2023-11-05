@@ -9,10 +9,8 @@ services:  # Define the services our application is composed of
     container_name: go_rod_app_container  # Give the container a custom name
     ports:  # Map ports (if your app listens on a port, you should map it here)
       - "8080:8080"  # This assumes your application listens on port 8080, change if needed
-    environment:  # Set environment variables (if you need any)
-      - "CHROME_BIN=/usr/bin/chromium-browser"
-      - "TG_TOKEN=5876084569:AAElMTaAUTdnliytYdE0i5WIq6viDa-RwcQ"
-      - "OPENAI_TOKEN=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"
+    env_file:
+      - .env
       # Bind mount a volume (optional, uncomment if needed)
       # - ./data:/app/data  # Persist data by mapping a local folder to a folder in the container
     command: ["./go-rod-app"]  # Override the default command (this is optional as it's already defined in Dockerfile)
