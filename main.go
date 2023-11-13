@@ -159,6 +159,7 @@ func main() {
 		}
 
 		digestdata := make([]DigestContent, len(articles_to_process))
+	OUTER:
 		for idx, article := range articles_to_process {
 			// wait for 5 seconds
 			time.Sleep(5 * time.Second)
@@ -192,7 +193,9 @@ func main() {
 					Messages: chathistory,
 				})
 				if err != nil {
-					log.Fatal(err)
+					// continue
+					c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)) + " could not be processed.")
+					continue OUTER
 				}
 				chathistory = append(chathistory, completion.Choices[0].Message)
 			}
@@ -207,8 +210,11 @@ func main() {
 				Messages: chathistory,
 			})
 			if err != nil {
-				log.Fatal(err)
+				// continue
+				c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)) + " could not be processed.")
+				continue
 			}
+			redisClient.Set(ctx, article.Link, article.Content, 7*24*time.Hour)
 			digestdata = append(digestdata, DigestContent{
 				Title:   article.Title,
 				Content: strings.TrimSpace(completion.Choices[0].Message.Content),
@@ -216,11 +222,6 @@ func main() {
 				Date:    article.Date,
 			})
 
-		}
-
-		// cache the articles
-		for _, article := range digestdata {
-			redisClient.Set(ctx, article.Link, article.Content, 7*24*time.Hour)
 		}
 
 		merged_digests := append(digestdata, cached_articles_content...)
