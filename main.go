@@ -160,7 +160,7 @@ func main() {
 		digestdata := make([]DigestContent, len(articles))
 		for idx, article := range articles {
 			// wait for 5 seconds
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 
 			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)))
 
@@ -202,7 +202,7 @@ func main() {
 			})
 
 			completion, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-				Model:    openai.GPT3Dot5Turbo16K,
+				Model:    openai.GPT3Dot5Turbo1106,
 				Messages: chathistory,
 			})
 			if err != nil {
@@ -316,34 +316,34 @@ type DigestContent struct {
 }
 
 var linksToElements = []ArticleInfoSelectors{
-	{
-		Title:               "ZWP Online - Dental News",
-		Link:                "https://www.zwp-online.info/zwpnews/dental-news",
-		ArticleSelector:     ".articles article",
-		ArticleTitle:        ".content_wrapper a h3",
-		Pagination:          ".pagination li:has(a:not([rel=\"prev\"]))",
-		CookieConsent:       "#cookiesEnabled",
-		CookieType:          Normal,
-		IsJsPager:           false,
-		ArticleDate:         ".small_subline span",
-		ArticleLink:         ".content_wrapper a",
-		ArticleTextSelector: ".detail_text",
-	},
-	{
-		Title:               "Zahnmedizin Online - Alle News",
-		Link:                "https://www.zm-online.de/news/alle-news",
-		Pagination:          ".button-wrap.frame-space-before-m",
-		IsJsPager:           true,
-		CookieType:          Frame,
-		CookieConsent:       "button[title=\"Akzeptieren\"]",
-		FrameConsent:        "#sp_message_iframe_712588",
-		ArticleSelector:     ".newslist .article.hover-effect.articletype-0.clearfix",
-		ArticleTitle:        ".news-text-wrap h2",
-		ArticleDate:         ".meta-info-wrap time",
-		ArticleLink:         "a",
-		ArticleTextSelector: ".bodytext",
-		ErrorPage:           ".typo3-error-page",
-	},
+	// {
+	// 	Title:               "ZWP Online - Dental News",
+	// 	Link:                "https://www.zwp-online.info/zwpnews/dental-news",
+	// 	ArticleSelector:     ".articles article",
+	// 	ArticleTitle:        ".content_wrapper a h3",
+	// 	Pagination:          ".pagination li:has(a:not([rel=\"prev\"]))",
+	// 	CookieConsent:       "#cookiesEnabled",
+	// 	CookieType:          Normal,
+	// 	IsJsPager:           false,
+	// 	ArticleDate:         ".small_subline span",
+	// 	ArticleLink:         ".content_wrapper a",
+	// 	ArticleTextSelector: ".detail_text",
+	// },
+	// {
+	// 	Title:               "Zahnmedizin Online - Alle News",
+	// 	Link:                "https://www.zm-online.de/news/alle-news",
+	// 	Pagination:          ".button-wrap.frame-space-before-m",
+	// 	IsJsPager:           true,
+	// 	CookieType:          Frame,
+	// 	CookieConsent:       "button[title=\"Akzeptieren\"]",
+	// 	FrameConsent:        "#sp_message_iframe_712588",
+	// 	ArticleSelector:     ".newslist .article.hover-effect.articletype-0.clearfix",
+	// 	ArticleTitle:        ".news-text-wrap h2",
+	// 	ArticleDate:         ".meta-info-wrap time",
+	// 	ArticleLink:         "a",
+	// 	ArticleTextSelector: ".bodytext",
+	// 	ErrorPage:           ".typo3-error-page",
+	// },
 	{
 		Title:               "ZMK Aktuell - Fachgebiete",
 		Link:                "https://www.zmk-aktuell.de/fachgebiete.html",
@@ -358,29 +358,29 @@ var linksToElements = []ArticleInfoSelectors{
 		ArticleLink:         "a",
 		ArticleTextSelector: "#article-detail",
 	},
-	{
-		Title:               "ZMK Aktuell - Junge Zahnärzte",
-		Link:                "https://www.zmk-aktuell.de/junge-zahnaerzte.html",
-		ArticleSelector:     "#articles .row.article",
-		ArticleTitle:        ".large-8.columns a h2",
-		Pagination:          ".pagination li a",
-		IsJsPager:           false,
-		ArticleDate:         ".subtitle div",
-		ArticleLink:         "a",
-		ArticleTextSelector: "#article-detail",
-	},
-	{
-		Title:               "DZW - Zahnmedizin",
-		Link:                "https://dzw.de/zahnmedizin",
-		ArticleSelector:     ".list article",
-		Pagination:          ".pager__items.js-pager__items li a",
-		IsJsPager:           false,
-		ArticleTitle:        ".teaser__headline span",
-		ArticleDate:         ".teaser__authored span.date",
-		ArticleLink:         ".teaser__headline a",
-		CookieType:          None,
-		ArticleTextSelector: "#block-mainpagecontent > article > div > div > article > div.article-content-wrapper > div > div",
-	},
+	// {
+	// 	Title:               "ZMK Aktuell - Junge Zahnärzte",
+	// 	Link:                "https://www.zmk-aktuell.de/junge-zahnaerzte.html",
+	// 	ArticleSelector:     "#articles .row.article",
+	// 	ArticleTitle:        ".large-8.columns a h2",
+	// 	Pagination:          ".pagination li a",
+	// 	IsJsPager:           false,
+	// 	ArticleDate:         ".subtitle div",
+	// 	ArticleLink:         "a",
+	// 	ArticleTextSelector: "#article-detail",
+	// },
+	// {
+	// 	Title:               "DZW - Zahnmedizin",
+	// 	Link:                "https://dzw.de/zahnmedizin",
+	// 	ArticleSelector:     ".list article",
+	// 	Pagination:          ".pager__items.js-pager__items li a",
+	// 	IsJsPager:           false,
+	// 	ArticleTitle:        ".teaser__headline span",
+	// 	ArticleDate:         ".teaser__authored span.date",
+	// 	ArticleLink:         ".teaser__headline a",
+	// 	CookieType:          None,
+	// 	ArticleTextSelector: "#block-mainpagecontent > article > div > div > article > div.article-content-wrapper > div > div",
+	// },
 }
 
 func get_article_contents(meta []ArticleInfo) []ArticleContent {
