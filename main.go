@@ -14,9 +14,12 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	godotenv "github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	openai "github.com/sashabaranov/go-openai"
 	tele "gopkg.in/telebot.v3"
 )
+
+var ctx = context.Background()
 
 // a map with chat ids whose request is being processed right now
 var processing = make(map[int64]bool)
@@ -97,20 +100,6 @@ func formatDigestAsHtml(digestdata []DigestContent) string {
 	return html
 }
 
-func validateChatCache(chatId int64) bool {
-	if _, ok := cachedDigests[chatId]; ok {
-		println("cached digest found")
-		// check if the digest is older than 1 day
-		diff := time.Until(cachedDigests[chatId].DateCreated)
-		if diff.Abs().Hours() <= 24 {
-			return false
-		} else {
-			return true
-		}
-	}
-	return true
-}
-
 func main() {
 	godotenv.Load(".env")
 
@@ -134,21 +123,33 @@ func main() {
 	})
 
 	b.Handle("/generate", func(c tele.Context) error {
-		if processing[c.Chat().ID] {
-			return c.Send("Your request is being processed. Please wait until it is finished")
-		}
-
-		processing[c.Chat().ID] = true
-
-		if !validateChatCache(c.Chat().ID) {
-			processing[c.Chat().ID] = false
-
-			return c.Send("Your digest is older than 24 hours. Please wait until it is updated")
-		}
 
 		c.Send("Please wait until your request is processed. It may take up to 5 minutes")
 
 		articles := get_articles()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     "redis-13554.c85.us-east-1-2.ec2.cloud.redislabs.com:13554",
+			Password: os.Getenv("REDIS_PW"), // no password set
+			DB:       0,                     // use default DB
+		})
+
+		var cached_articles_content []DigestContent
+		var articles_to_process []ArticleContent
+
+		for _, article := range articles {
+			// check if the article is already cached
+			if val, err := redisClient.Get(ctx, article.Link).Result(); err == nil {
+				cached_articles_content = append(cached_articles_content, DigestContent{
+					Title:   article.Title,
+					Link:    article.Link,
+					Date:    article.Date,
+					Content: val,
+				})
+			} else {
+				articles_to_process = append(articles_to_process, article)
+			}
+		}
 
 		c.Send("Found " + fmt.Sprintf("%d", len(articles)) + " articles for the last week")
 
@@ -157,12 +158,12 @@ func main() {
 			return c.Send("No articles for the last week found")
 		}
 
-		digestdata := make([]DigestContent, len(articles))
-		for idx, article := range articles {
+		digestdata := make([]DigestContent, len(articles_to_process))
+		for idx, article := range articles_to_process {
 			// wait for 5 seconds
 			time.Sleep(5 * time.Second)
 
-			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)))
+			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)))
 
 			// create a prompt
 			prompt := "This is a summary of an article. Please create a short digest of maximum 1 sentence in german language only of the following article. Make the output as concise and comprehensive, though as short as possible. Please respond only with the content of the digest and nothing else. Exclude article name " + article.SectionTitle + ":\n\n" + article.Title + "\n\n" + article.Content + "\n\n"
@@ -186,7 +187,7 @@ func main() {
 			for _, prompt := range prompts {
 
 				chathistory = append(chathistory, prompt)
-				completion, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+				completion, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 					Model:    openai.GPT3Dot5Turbo16K,
 					Messages: chathistory,
 				})
@@ -201,7 +202,7 @@ func main() {
 				Content: "please create a digest of the article and output it your response without any other text",
 			})
 
-			completion, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			completion, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 				Model:    openai.GPT3Dot5Turbo1106,
 				Messages: chathistory,
 			})
@@ -217,7 +218,13 @@ func main() {
 
 		}
 
-		formattedDigest := formatDigestAsHtml(digestdata)
+		// cache the articles
+		for _, article := range digestdata {
+			redisClient.Set(ctx, article.Link, article.Content, 7*24*time.Hour)
+		}
+
+		merged_digests := append(digestdata, cached_articles_content...)
+		formattedDigest := formatDigestAsHtml(merged_digests)
 		cachedDigests[c.Chat().ID] = CachedDigest{
 			ChatId:      c.Chat().ID,
 			Digest:      formattedDigest,
