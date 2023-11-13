@@ -124,6 +124,12 @@ func main() {
 
 	b.Handle("/generate", func(c tele.Context) error {
 
+		if processing[c.Chat().ID] {
+			return c.Send("Your request is being processed. Please wait until it is finished.")
+		}
+
+		processing[c.Chat().ID] = true
+
 		c.Send("Please wait until your request is processed. It may take up to 5 minutes")
 
 		articles := get_articles()
