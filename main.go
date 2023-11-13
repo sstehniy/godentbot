@@ -247,7 +247,7 @@ func main() {
 
 func get_articles() []ArticleContent {
 	meta := get_article_meta()
-
+	log.Printf("meta: %v", len(meta))
 	// remove duplicates
 	seen := make(map[string]bool)
 	var unique []ArticleInfo
@@ -257,7 +257,10 @@ func get_articles() []ArticleContent {
 			seen[article.Link] = true
 		}
 	}
-
+	log.Printf("unique: %v", len(unique))
+	for _, article := range unique {
+		log.Printf("date: %v, link: %v", article.Date, article.Link)
+	}
 	texts := get_article_contents(unique)
 
 	return texts
@@ -439,7 +442,7 @@ func getArticleText(obj *ArticleInfo) (ArticleContent, error) {
 	}
 
 	rod.Try(func() {
-		cookieconsent := page.MustElement(obj.FrameConsent)
+		cookieconsent := page.Timeout(1 * time.Second).MustElement(obj.FrameConsent)
 		switch obj.CookieType {
 		case Normal:
 			page.MustElement(obj.CookieConsent).MustClick()
@@ -547,9 +550,8 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return articles
 	}
-
 	rod.Try(func() {
-		cookieconsent := page.MustElement(obj.FrameConsent)
+		cookieconsent := page.Timeout(1 * time.Second).MustElement(obj.FrameConsent)
 		switch obj.CookieType {
 		case Normal:
 			page.MustElement(obj.CookieConsent).MustClick()
@@ -558,7 +560,7 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 		case None:
 			break
 		}
-		cookieconsent.MustWaitInvisible()
+		cookieconsent.Timeout(1 * time.Second).MustWaitInvisible()
 	})
 
 	page.MustSetViewport(1920, 1080, 1, false)
@@ -601,6 +603,7 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 func getArticles(page *rod.Page, obj *ArticleInfoSelectors) []ArticleInfo {
 	var articles []ArticleInfo
 	data := page.MustElements(obj.ArticleSelector)
+
 	for _, d := range data {
 		title := strings.TrimSpace(d.MustElement(obj.ArticleTitle).MustText())
 		link := strings.TrimSpace(*d.MustElement(obj.ArticleLink).MustAttribute("href"))
