@@ -83,6 +83,34 @@ func splitDigest(text string, splitLength int) []string {
 	return result
 }
 
+func createChatCompletionWithTimeout(client *openai.Client, request openai.ChatCompletionRequest, timeoutDuration time.Duration) (*openai.ChatCompletionResponse, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	completionChan := make(chan *openai.ChatCompletionResponse)
+	errorChan := make(chan error)
+	timeout := time.After(timeoutDuration) // Set your timeout duration
+
+	go func() {
+		completion, err := client.CreateChatCompletion(ctx, request)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		completionChan <- &completion
+	}()
+
+	select {
+	case completion := <-completionChan:
+		return completion, nil
+	case err := <-errorChan:
+		return nil, err
+	case <-timeout:
+		cancel() // Cancel the context to stop the operation
+		return nil, fmt.Errorf("operation timed out")
+	}
+}
+
 func formatDigestAsHtml(digestdata []DigestContent) string {
 	// filter out empty digests
 	filtered := []DigestContent{}
@@ -132,19 +160,17 @@ func main() {
 
 		c.Send("Please wait until your request is processed. It may take up to 5 minutes")
 
-		articles := get_articles()
-
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     "redis-13554.c85.us-east-1-2.ec2.cloud.redislabs.com:13554",
 			Password: os.Getenv("REDIS_PW"), // no password set
 			DB:       0,                     // use default DB
 		})
 
-		var cached_articles_content []DigestContent
-		var articles_to_process []ArticleContent
+		info := get_articles()
+		cached_articles_content := []DigestContent{}
+		info_to_process := []ArticleInfo{}
 
-		for _, article := range articles {
-			// check if the article is already cached
+		for _, article := range info {
 			if val, err := redisClient.Get(ctx, article.Link).Result(); err == nil {
 				cached_articles_content = append(cached_articles_content, DigestContent{
 					Title:   article.Title,
@@ -153,24 +179,20 @@ func main() {
 					Content: val,
 				})
 			} else {
-				articles_to_process = append(articles_to_process, article)
+				info_to_process = append(info_to_process, article)
 			}
 		}
 
-		c.Send("Found " + fmt.Sprintf("%d", len(articles)) + " articles for the last week")
+		fmt.Printf("info to process: %v", len(info_to_process))
+		fmt.Printf("cached articles: %v", len(cached_articles_content))
+		articles := get_article_contents(info_to_process)
 
-		if len(articles) == 0 {
-			processing[c.Chat().ID] = false
-			return c.Send("No articles for the last week found")
-		}
+		c.Send("Found " + fmt.Sprintf("%d", len(articles)+len(cached_articles_content)) + " articles for the last week")
 
-		digestdata := make([]DigestContent, len(articles_to_process))
+		digestdata := make([]DigestContent, len(info_to_process))
 	OUTER:
-		for idx, article := range articles_to_process {
-			// wait for 5 seconds
-			time.Sleep(5 * time.Second)
-
-			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)))
+		for idx, article := range articles {
+			c.Send("Processing article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)))
 
 			// create a prompt
 			prompt := "This is a summary of an article. Please create a short digest of maximum 1 sentence in german language only of the following article. Make the output as concise and comprehensive, though as short as possible. Please respond only with the content of the digest and nothing else. Exclude article name " + article.SectionTitle + ":\n\n" + article.Title + "\n\n" + article.Content + "\n\n"
@@ -194,13 +216,21 @@ func main() {
 			for _, prompt := range prompts {
 
 				chathistory = append(chathistory, prompt)
-				completion, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+				time.Sleep(1 * time.Second)
+
+				// completion, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+				// 	Model:    openai.GPT3Dot5Turbo16K,
+				// 	Messages: chathistory,
+				// })
+
+				completion, err := createChatCompletionWithTimeout(client, openai.ChatCompletionRequest{
 					Model:    openai.GPT3Dot5Turbo16K,
 					Messages: chathistory,
-				})
+				}, 30*time.Second)
+
 				if err != nil {
 					// continue
-					c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)) + " could not be processed.")
+					c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)) + " could not be processed.")
 					continue OUTER
 				}
 				chathistory = append(chathistory, completion.Choices[0].Message)
@@ -211,16 +241,16 @@ func main() {
 				Content: "please create a digest of the article and output it your response without any other text",
 			})
 
-			completion, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-				Model:    openai.GPT3Dot5Turbo1106,
+			completion, err := createChatCompletionWithTimeout(client, openai.ChatCompletionRequest{
+				Model:    openai.GPT3Dot5Turbo16K,
 				Messages: chathistory,
-			})
+			}, 30*time.Second)
 			if err != nil {
 				// continue
-				c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles_to_process)) + " could not be processed.")
+				c.Send("Article " + fmt.Sprintf("%d", idx+1) + "/" + fmt.Sprintf("%d", len(articles)) + " could not be processed.")
 				continue
 			}
-			redisClient.Set(ctx, article.Link, article.Content, 7*24*time.Hour)
+			redisClient.Set(ctx, article.Link, strings.TrimSpace(completion.Choices[0].Message.Content), 7*24*time.Hour)
 			digestdata = append(digestdata, DigestContent{
 				Title:   article.Title,
 				Content: strings.TrimSpace(completion.Choices[0].Message.Content),
@@ -231,7 +261,30 @@ func main() {
 		}
 
 		merged_digests := append(digestdata, cached_articles_content...)
-		formattedDigest := formatDigestAsHtml(merged_digests)
+		var output_digest []DigestContent
+		// rilter unique digests
+		seen := make(map[string]bool)
+		for _, digest := range merged_digests {
+			if _, ok := seen[digest.Content]; !ok {
+				output_digest = append(output_digest, digest)
+				seen[digest.Content] = true
+			}
+		}
+		// sort the digests by date
+		sort.Slice(output_digest, func(i, j int) bool {
+			// convert date string to time
+			layout := "02.01.2006"
+			t1, err := time.Parse(layout, output_digest[i].Date)
+			if err != nil {
+				log.Fatal(err)
+			}
+			t2, err := time.Parse(layout, output_digest[j].Date)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return t2.Before(t1)
+		})
+		formattedDigest := formatDigestAsHtml(output_digest)
 		cachedDigests[c.Chat().ID] = CachedDigest{
 			ChatId:      c.Chat().ID,
 			Digest:      formattedDigest,
@@ -244,22 +297,12 @@ func main() {
 		}
 		println("digest sent")
 		return nil
-		// return c.Send(formattedDigest, &tele.SendOptions{ParseMode: tele.ModeHTML})
 	})
 
 	b.Start()
 }
 
-// func create_cron_job(c tele.Context, client *openai.Client) {
-// 	cron := cron.New()
-
-// 	// every 1 minute
-// 	cron.AddFunc("*/10 * * * * *", func() {
-
-// 	})
-// }
-
-func get_articles() []ArticleContent {
+func get_articles() []ArticleInfo {
 	meta := get_article_meta()
 	log.Printf("meta: %v", len(meta))
 	// remove duplicates
@@ -275,9 +318,7 @@ func get_articles() []ArticleContent {
 	for _, article := range unique {
 		log.Printf("date: %v, link: %v", article.Date, article.Link)
 	}
-	texts := get_article_contents(unique)
-
-	return texts
+	return unique
 }
 
 const (
@@ -421,7 +462,6 @@ func getArticleText(obj *ArticleInfo) (ArticleContent, error) {
 
 	path, _ := launcher.LookPath()
 	u := launcher.New().Bin(path).MustLaunch()
-	println(u)
 	browser := rod.New().ControlURL(u).MustConnect()
 	page := browser.MustPage()
 
@@ -438,7 +478,6 @@ func getArticleText(obj *ArticleInfo) (ArticleContent, error) {
 	if obj.ErrorPage != "" {
 		err := rod.Try(func() {
 			page.Timeout(1 * time.Second).MustElement(obj.ErrorPage)
-
 		})
 
 		if err == nil {
@@ -553,7 +592,6 @@ func processPage(obj *ArticleInfoSelectors) []ArticleInfo {
 	var articles []ArticleInfo
 	path, _ := launcher.LookPath()
 	u := launcher.New().Bin(path).MustLaunch()
-	println(u)
 	browser := rod.New().ControlURL(u).MustConnect()
 	page := browser.MustPage()
 
