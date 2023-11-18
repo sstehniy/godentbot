@@ -276,11 +276,11 @@ func main() {
 			layout := "02.01.2006"
 			t1, err := time.Parse(layout, output_digest[i].Date)
 			if err != nil {
-				log.Fatal(err)
+				return false
 			}
 			t2, err := time.Parse(layout, output_digest[j].Date)
 			if err != nil {
-				log.Fatal(err)
+				return false
 			}
 			return t2.Before(t1)
 		})
